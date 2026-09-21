@@ -3,1234 +3,289 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultra HD PDF to HTML Converter</title>
-    
-    <!-- Tailwind CSS -->
-    <script>
-        // Silence only the Tailwind Play CDN production warning; all other warnings still show
-        (function () {
-            const originalWarn = console.warn;
-            console.warn = function (...args) {
-                if (typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com should not be used in production')) return;
-                originalWarn.apply(console, args);
-            };
-        })();
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PDF.js 3.11.174 for client-side rendering -->
+    <title>PDF to zoomable HTML</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Noto+Sans+Devanagari:wght@700&display=swap" rel="stylesheet">
+    <!-- PDF.js 3.11.174 (reads the PDF in your browser) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <!-- Loading the worker as a normal script lets PDF.js run without background workers (works in sandboxes/previews) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-    
     <style>
+        :root {
+            --mist: #E9F0EC;
+            --ink: #10271F;
+            --ink-soft: #3C5549;
+            --leaf: #1F7A55;
+            --leaf-deep: #16603F;
+            --turmeric: #D99A1E;
+            --paper: #FFFFFF;
+            --rule: #C9D6CF;
+            --danger: #A3312A;
+            --display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+            --body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+        }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; }
         body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            background: var(--mist);
+            color: var(--ink);
+            font: 400 17px/1.55 var(--body);
+            -webkit-font-smoothing: antialiased;
         }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+        .hidden { display: none !important; }
+
+        .shell {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: clamp(28px, 6vw, 72px) clamp(20px, 5vw, 48px) 56px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+            gap: clamp(32px, 6vw, 88px);
+            align-items: center;
         }
-        .dropzone-active {
-            border-color: #3b82f6 !important;
-            background-color: #eff6ff !important;
-            transform: scale(1.02);
+
+        /* ---------- left: what this is ---------- */
+        .intro h1 {
+            font-family: var(--display);
+            font-weight: 800;
+            font-size: clamp(2.4rem, 4.3vw, 3.5rem);
+            line-height: 1.02;
+            letter-spacing: -0.025em;
+            margin: 0 0 20px;
+            max-width: 15ch;
+            text-wrap: balance;
         }
-        .animate-stripes {
-            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%, transparent 75%, transparent);
-            background-size: 1rem 1rem;
-            animation: progress-stripes 1s linear infinite;
+        .intro .lead {
+            font-size: 1.12rem;
+            color: var(--ink-soft);
+            max-width: 38ch;
+            margin: 0 0 28px;
         }
-        @keyframes progress-stripes {
-            from { background-position: 1rem 0; }
-            to { background-position: 0 0; }
+        .facts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--rule); max-width: 40ch; }
+        .facts li {
+            display: flex; gap: 14px; align-items: flex-start;
+            padding: 13px 0; border-bottom: 1px solid var(--rule);
+        }
+        .facts svg { flex: none; width: 22px; height: 22px; margin-top: 2px; color: var(--leaf); }
+
+        /* ---------- right: the sheet ---------- */
+        .stage { position: relative; }
+        .sheet {
+            position: relative;
+            background: var(--paper);
+            border-radius: 6px 44px 6px 6px;
+            min-height: 470px;
+            padding: 40px 40px 118px;
+            box-shadow: 0 1px 0 var(--rule), 0 24px 60px -28px rgba(16, 39, 31, .35);
+            background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, #EEF3F0 35px, #EEF3F0 36px);
+            background-position: 0 92px;
+            display: flex; flex-direction: column;
+        }
+        /* folded corner */
+        .sheet::before {
+            content: ''; position: absolute; top: 0; right: 0; width: 44px; height: 44px;
+            background: linear-gradient(225deg, var(--mist) 50%, #DCE6E0 50%);
+            border-radius: 0 44px 0 6px;
+        }
+
+        /* the one bold element: a lens showing a crisp enlarged letter */
+        .loupe { position: absolute; right: -30px; bottom: -34px; width: 150px; height: 150px; pointer-events: none; }
+        .lens {
+            position: absolute; inset: 0; border-radius: 50%; background: var(--paper);
+            border: 10px solid var(--ink);
+            box-shadow: 0 18px 40px -16px rgba(16, 39, 31, .5);
+            display: grid; place-items: center; overflow: hidden;
+        }
+        .lens span {
+            font-family: 'Noto Sans Devanagari', 'Nirmala UI', 'Mangal', sans-serif;
+            font-weight: 700; font-size: 100px; line-height: 1; color: var(--ink);
+            transform: translateY(6px);
+        }
+        .handle {                           /* starts on the rim at 45 degrees */
+            position: absolute; left: 122px; top: 113px; width: 64px; height: 18px;
+            background: var(--ink); border-radius: 9px;
+            transform: rotate(45deg); transform-origin: 0 50%;
+        }
+
+        .sheet h2 { font-family: var(--display); font-weight: 700; font-size: 1.55rem; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+        .sheet .muted { color: var(--ink-soft); margin: 0; }
+
+        /* drop area */
+        #dropzone {
+            flex: 1; margin-top: 26px;
+            border: 2px dashed var(--rule); border-radius: 14px;
+            background: rgba(255, 255, 255, .78);
+            display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+            gap: 18px; padding: 34px 30px 34px;
+            cursor: pointer;
+            transition: border-color .15s, background-color .15s, transform .15s;
+        }
+        #dropzone:hover { border-color: var(--leaf); }
+        #dropzone:focus-visible { outline: 3px solid var(--turmeric); outline-offset: 4px; }
+        #dropzone.dropzone-active { border-color: var(--leaf); border-style: solid; background: #F1F8F4; transform: translateY(-3px); }
+        .drop-title { font-family: var(--display); font-weight: 700; font-size: 1.3rem; margin: 0; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 10px;
+            font: 700 1rem/1 var(--body);
+            padding: 15px 22px; border-radius: 12px; border: 0; cursor: pointer;
+            background: var(--leaf); color: #fff;
+            transition: background-color .15s;
+        }
+        .btn:hover { background: var(--leaf-deep); }
+        .btn:focus-visible { outline: 3px solid var(--turmeric); outline-offset: 3px; }
+        .btn svg { width: 20px; height: 20px; }
+        .btn.quiet { background: transparent; color: var(--leaf-deep); border: 2px solid var(--rule); }
+        .btn.quiet:hover { background: #F1F8F4; border-color: var(--leaf); }
+        .small { font-size: .9rem; color: var(--ink-soft); margin: 0; }
+
+        /* error */
+        #errorBox {
+            display: flex; gap: 12px; align-items: flex-start;
+            margin-top: 20px; padding: 14px 16px; border-radius: 12px;
+            background: #FBEDEB; color: var(--danger); font-weight: 700; font-size: .95rem;
+            border-left: 5px solid var(--danger);
+        }
+        #errorBox svg { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+
+        /* progress */
+        .file-chip {
+            display: inline-flex; align-items: center; gap: 10px; max-width: 100%;
+            margin: 22px 0 26px; padding: 10px 14px; border-radius: 10px;
+            background: #F3F7F5; border: 1px solid var(--rule); font-weight: 700;
+        }
+        .file-chip svg { flex: none; width: 20px; height: 20px; color: var(--leaf); }
+        .file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .track { height: 14px; border-radius: 7px; background: #E3EBE6; overflow: hidden; }
+        #progressBar {
+            width: 0; height: 100%; border-radius: 7px; background: var(--turmeric);
+            transition: width .3s ease;
+        }
+        .progress-meta { display: flex; justify-content: space-between; margin-top: 10px; font-size: .95rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+        #percentText { font-weight: 700; color: var(--ink); }
+
+        /* success */
+        .done-mark {
+            width: 58px; height: 58px; border-radius: 50%; background: var(--leaf); color: #fff;
+            display: grid; place-items: center; margin-bottom: 20px;
+        }
+        .done-mark svg { width: 30px; height: 30px; }
+        .next-steps { margin: 18px 0 28px; padding-left: 20px; color: var(--ink-soft); }
+        .next-steps li { margin: 4px 0; }
+
+        .signature {
+            position: fixed; right: 22px; bottom: 16px;
+            font: 700 .8rem/1 var(--display); letter-spacing: .08em; color: rgba(16, 39, 31, .28);
+            pointer-events: none; user-select: none;
+        }
+
+        @media (max-width: 860px) {
+            .shell { grid-template-columns: 1fr; gap: 40px; padding-top: 28px; }
+            .intro h1 { max-width: 16ch; }
+            .stage { order: -1; margin-right: 22px; }          /* the drop area comes first on phones */
+            .sheet { min-height: 0; padding: 30px 24px 92px; }
+            .loupe { width: 104px; height: 104px; right: -22px; bottom: -26px; }
+            .lens { border-width: 8px; }
+            .lens span { font-size: 68px; }
+            .handle { left: 85px; top: 78px; width: 42px; height: 14px; }
+            .signature { position: static; text-align: right; padding: 0 22px 18px; }
+        }
+        @media (max-width: 420px) {
+            .intro h1 { font-size: 2.2rem; }
+            .sheet { padding: 26px 20px 84px; }
+            #dropzone { padding: 26px 20px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; }
         }
     </style>
-</head>
-<body class="bg-gradient-to-br from-gray-900 via-slate-800 to-black min-h-screen flex items-center justify-center p-4 text-gray-800 relative">
-
-    <div class="max-w-xl w-full relative z-10">
-        <div class="glass-panel rounded-3xl shadow-2xl p-8 md:p-12 transition-all duration-500">
-            
-            <!-- Header -->
-            <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 text-blue-600 mb-4 shadow-sm border border-blue-100">
-                    <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 16.5v-3h1.2a1.2 1.2 0 0 1 0 2.4H8.5M13 13.5v3h.8a1.5 1.5 0 0 0 0-3zM17.5 13.5h-1.6v3M15.9 15h1.3"/></svg>
-                </div>
-                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">HD PDF Converter</h1>
-                <p class="text-gray-500 mt-2 text-sm">Pixel-Perfect • Infinite Zoom</p>
-            </div>
-
-            <!-- Error Message Box -->
-            <div id="errorBox" class="hidden mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl flex items-center text-sm font-medium">
-                <svg class="w-5 h-5 mr-3 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>
-                <span id="errorMessage">An error occurred.</span>
-            </div>
-
-            <!-- Upload View -->
-            <div id="uploadView" class="block">
-                <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center cursor-pointer transition-all duration-300 hover:border-blue-500 hover:bg-slate-50 group">
-                    <input type="file" id="fileInput" accept="application/pdf" class="hidden" />
-                    
-                    <svg class="w-11 h-11 mx-auto text-slate-400 group-hover:text-blue-500 transition-colors duration-300 mb-4 block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"/><path d="M12 12v8M8.5 15.5 12 12l3.5 3.5"/></svg>
-                    
-                    <h3 class="text-lg font-bold text-slate-700 mb-1">Select a PDF</h3>
-                    <p class="text-slate-500 text-sm mb-4">or drag and drop it here</p>
-                    
-                    <span class="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
-                        <svg class="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg> Client-Side Processing
-                    </span>
-                </div>
-            </div>
-
-            <!-- Progress View -->
-            <div id="progressView" class="hidden py-6">
-                <div class="text-center mb-6">
-                    <svg class="w-9 h-9 mx-auto text-blue-500 mb-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
-                    <h3 class="text-xl font-bold text-gray-800 mb-1" id="statusTitle">Reading PDF...</h3>
-                    <p class="text-gray-500 text-sm" id="statusSubtitle">Keeping every layer exactly as in the PDF.</p>
-                </div>
-
-                <div class="w-full bg-slate-200 rounded-full h-4 overflow-hidden mb-2 shadow-inner">
-                    <div id="progressBar" class="h-full bg-blue-600 animate-stripes transition-all duration-300 w-0"></div>
-                </div>
-                
-                <div class="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    <span id="pageCounter">Preparing...</span>
-                    <span id="percentText">0%</span>
-                </div>
-            </div>
-
-            <!-- Success View -->
-            <div id="successView" class="hidden text-center py-6">
-                <div class="w-20 h-20 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-4 border border-green-100 shadow-sm">
-                    <svg class="w-10 h-10 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-                </div>
-                <h3 class="text-2xl font-bold text-gray-800 mb-2">Conversion Complete!</h3>
-                <p class="text-gray-500 text-sm mb-6">Your HTML file is downloading. It looks exactly like the PDF and stays sharp at any zoom.</p>
-                
-                <button id="resetBtn" class="inline-flex items-center bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold transition-colors border border-slate-200">
-                    <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4v4.5H8"/></svg> Convert Another
-                </button>
-            </div>
-
-        </div>
-    </div>
-
-
-    <!-- Discreet Signature -->
-    <div class="fixed bottom-4 right-6 text-white/30 text-sm font-semibold tracking-widest pointer-events-none select-none z-0">
-        sujal
-    </div>
-
-    <!-- Viewer engine that gets embedded into every converted file -->
-    <script type="text/plain" id="viewerRuntime">
-(function () {
-  'use strict';
-  var CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-  var MAX_BASE_AREA = 4000000;    // pixel cap for the light full-page placeholder
-  var MAX_DETAIL_AREA = 24000000; // pixel cap for the on-screen canvas (a 4K screen is ~8.3M)
-  var KEEP_MARGIN = '120% 0px';   // pages farther than this free their memory
-  var PT_TO_CSS = 96 / 72;        // 100% zoom = true physical size of the PDF page
-  var ZOOM_STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16];
-  var MIN_Z = 0.25, MAX_Z = 16;
-
-  // ---------- Engine setup ----------
-  // Use a background worker when the browser allows it (smoother); otherwise run the engine on the page itself.
-  function prepareWorker() {
-    var workerEl = document.getElementById('pdfjs-worker');
-    var code = workerEl && workerEl.textContent.length > 1000 ? workerEl.textContent : null;
-
-    if (workerEl) workerEl.textContent = '';         // keep only one copy in memory
-
-    function runOnPage() {
-      if (window.pdfjsWorker) return Promise.resolve();
-      return new Promise(function (resolve) {
-        var sc = document.createElement('script');
-        if (code) { sc.textContent = code; document.head.appendChild(sc); resolve(); }
-        else { sc.src = CDN + 'pdf.worker.min.js'; sc.onload = sc.onerror = function () { resolve(); }; document.head.appendChild(sc); }
-      });
-    }
-
-    return new Promise(function (resolve) {
-      var settled = false, timer = null, test = null;
-      function useWorker(url) { if (settled) return; settled = true; clearTimeout(timer); pdfjsLib.GlobalWorkerOptions.workerSrc = url; resolve(); }
-      function fallback() { if (settled) return; settled = true; clearTimeout(timer); try { test && test.terminate(); } catch (e) {} runOnPage().then(resolve); }
-      try {
-        if (!code || typeof Worker === 'undefined') { fallback(); return; }
-        var url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
-        test = new Worker(URL.createObjectURL(new Blob(['postMessage(1)'], { type: 'text/javascript' })));
-        test.onmessage = function () { test.terminate(); useWorker(url); };
-        test.onerror = fallback;
-        timer = setTimeout(fallback, 800);
-      } catch (e) { fallback(); }
-    });
-  }
-
-  // ---------- Image enhancer (runs in a background thread) ----------
-  // 1) pdf.js draws pictures normally (instant).  2) The visible part of an enlarged picture is sent to a
-  // worker that rebuilds crisp edges on its own GPU context.  3) The visible area is redrawn with the result,
-  // which is just a cheap bitmap draw, so layering and clipping stay exactly as in the PDF.
-  // The main thread never does GPU setup, uploads or shader work.
-  (function installEnhancer() {
-    var origDraw = CanvasRenderingContext2D.prototype.drawImage;
-    // Background enhancer: two GPU passes in a worker.
-    //  pass 1 (picture resolution): local ink colour and paper colour maps from a 9x9 neighbourhood
-    //  pass 2 (screen resolution): smooth brightness field + smooth colour maps -> edges 1 screen pixel wide
-    var PIPELINE = "// Two-pass edge reconstruction. Works on WebGL1 in a worker or a page.\n// makeEnhancer(gl) -> function run(srcBitmap, rw, rh, ow, oh, a[2], b[2], opts) renders into gl's canvas (ow x oh)\nfunction makeEnhancer(gl) {\n  var P = '#ifdef GL_FRAGMENT_PRECISION_HIGH\\nprecision highp float;\\n#else\\nprecision mediump float;\\n#endif\\n';\n  var VS = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';\n  var COMMON = 'float lum(vec4 c){ return dot(c.rgb, vec3(0.299, 0.587, 0.114)) + (1.0 - c.a); }\\n';\n  // Pass 1: per source pixel, the local dark (\"ink\") or light (\"paper\") colour from a 5x5 gaussian neighbourhood\n  var FS1 = P + COMMON + [\n    'uniform sampler2D u_src; uniform vec2 u_size; uniform float u_which;',\n    'vec4 px(vec2 i){ return texture2D(u_src, (i + 0.5) / u_size); }',\n    'void main(){',\n    '  vec2 c0 = floor(gl_FragCoord.xy);',\n    '  vec2 cc = vec2(c0.x, u_size.y - 1.0 - c0.y);',          // framebuffer rows are bottom-up\n    '  float lmin = 9.0, lmax = -9.0; vec4 all = vec4(0.0); float sw = 0.0;',\n    // 9x9 neighbourhood: wide enough that small loops and gaps still \"see\" true paper and ink\n    '  for (int j = 0; j < 9; j++) { for (int i = 0; i < 9; i++) {',\n    '    vec2 d = vec2(float(i) - 4.0, float(j) - 4.0);',\n    '    vec4 t = px(cc + d); float l = lum(t); float ww = exp(-dot(d, d) / 12.5);',\n    '    lmin = min(lmin, l + (1.0 - ww) * 0.6); lmax = max(lmax, l - (1.0 - ww) * 0.6); all += t * ww; sw += ww;',\n    '  } }',\n    '  float r = max(lmax - lmin, 0.0);',\n    '  vec4 aLo = vec4(0.0), aHi = vec4(0.0); float wl = 0.0, wh = 0.0;',\n    '  for (int j = 0; j < 9; j++) { for (int i = 0; i < 9; i++) {',\n    '    vec2 d = vec2(float(i) - 4.0, float(j) - 4.0);',\n    '    vec4 t = px(cc + d); float l = lum(t); float ww = exp(-dot(d, d) / 12.5);',\n    // only clearly-light pixels define paper, only clearly-dark pixels define ink (edge pixels are left out)\n    '    float sh = smoothstep(lmin + 0.75 * r, lmin + 0.92 * r + 1e-4, l);',\n    '    float sl = 1.0 - smoothstep(lmin + 0.08 * r, lmin + 0.25 * r + 1e-4, l);',\n    '    aHi += t * (ww * sh); wh += ww * sh; aLo += t * (ww * sl); wl += ww * sl;',\n    '  } }',\n    '  vec4 lo = wl > 1e-3 ? aLo / wl : all / sw, hi = wh > 1e-3 ? aHi / wh : all / sw;',\n    '  if (u_which < 0.5) { gl_FragColor = lo; return; }',\n    '  if (u_which < 1.5) { gl_FragColor = hi; return; }',\n    // fit check: text/lines sit close to the ink or paper level; photo texture and noise do not\n    '  float ll = lum(lo), lh = lum(hi), span = max(lh - ll, 1e-3), res = 0.0;',\n    '  for (int j = 0; j < 9; j++) { for (int i = 0; i < 9; i++) {',\n    '    vec2 d = vec2(float(i) - 4.0, float(j) - 4.0);',\n    '    float l = lum(px(cc + d)); float ww = exp(-dot(d, d) / 12.5);',\n    '    float e = min(abs(l - ll), abs(l - lh)) / span;',\n    '    res += ww * e * smoothstep(0.1, 0.35, e);',\n    '  } }',\n    '  gl_FragColor = vec4(res / sw, 0.0, 0.0, 1.0);',\n    '}'].join('\\n');\n  // Pass 2: output pixels. Smooth brightness field + smooth ink/paper maps -> 1-pixel antialiased edges\n  var FS2 = P + COMMON + [\n    'uniform sampler2D u_src; uniform sampler2D u_lo; uniform sampler2D u_hi; uniform sampler2D u_q;',\n    'uniform vec2 u_size; uniform vec2 u_a; uniform vec2 u_b; uniform float u_outH; uniform float u_k; uniform float u_t;',\n    'vec4 px(vec2 i){ return texture2D(u_src, (i + 0.5) / u_size); }',\n    'vec4 crw(float t){ float t2=t*t, t3=t2*t; return vec4(-0.5*t3+t2-0.5*t, 1.5*t3-2.5*t2+1.0, -1.5*t3+2.0*t2+0.5*t, 0.5*t3-0.5*t2); }',\n    'vec4 crd(float t){ float t2=t*t; return vec4(-1.5*t2+2.0*t-0.5, 4.5*t2-5.0*t, -4.5*t2+4.0*t+0.5, 1.5*t2-t); }',\n    'vec4 bsw(float t){ float t2=t*t, t3=t2*t, u=1.0-t; return vec4(u*u*u, 3.0*t3-6.0*t2+4.0, -3.0*t3+3.0*t2+3.0*t+1.0, t3)/6.0; }',\n    'vec4 bsd(float t){ float t2=t*t, u=1.0-t; return vec4(-0.5*u*u, 1.5*t2-2.0*t, -1.5*t2+t+0.5, 0.5*t2); }',\n    'float pick(vec4 v, int i){ if (i == 0) return v.x; if (i == 1) return v.y; if (i == 2) return v.z; return v.w; }',\n    'void main(){',\n    '  vec2 o = vec2(gl_FragCoord.x, u_outH - gl_FragCoord.y);',\n    '  vec2 s = u_a * o + u_b;',                                     // continuous source coordinate\n    '  vec2 q = s - 0.5; vec2 i0 = floor(q); vec2 f = q - i0;',\n    '  vec4 cx = crw(f.x), cy = crw(f.y);',\n    '  vec4 wx = mix(cx, bsw(f.x), u_k), wy = mix(cy, bsw(f.y), u_k);',\n    '  vec4 dx = mix(crd(f.x), bsd(f.x), u_k), dy = mix(crd(f.y), bsd(f.y), u_k);',\n    '  vec4 v = vec4(0.0), vmin = vec4(1.0), vmax = vec4(0.0); float Y = 0.0, gx = 0.0, gy = 0.0;',\n    '  for (int j = 0; j < 4; j++) { for (int i = 0; i < 4; i++) {',\n    '    vec4 t = px(i0 + vec2(float(i) - 1.0, float(j) - 1.0)); float L = lum(t);',\n    '    v += t * (pick(wx, i) * pick(wy, j)); vmin = min(vmin, t); vmax = max(vmax, t);',\n    '    Y += L * (pick(wx, i) * pick(wy, j));',\n    '    gx += L * (pick(dx, i) * pick(wy, j)); gy += L * (pick(wx, i) * pick(dy, j));',\n    '  } }',\n    '  v = clamp(v, vmin, vmax);',\n    '  vec2 uv = s / u_size;',                                        // maps are sampled with smooth (linear) filtering\n    '  vec4 lo = texture2D(u_lo, vec2(uv.x, 1.0 - uv.y)), hi = texture2D(u_hi, vec2(uv.x, 1.0 - uv.y));',\n    '  float ll = lum(lo), lh = lum(hi), rng = lh - ll, mid = ll + u_t * rng;',\n    '  float fw = abs(gx * u_a.x) + abs(gy * u_a.y);',                 // brightness change per screen pixel\n    '  float a = clamp((Y - mid) / max(fw, 1e-4) + 0.5, 0.0, 1.0);',\n    '  gl_FragColor = mix(v, mix(lo, hi, a), smoothstep(0.09, 0.24, rng) * (1.0 - smoothstep(0.10, 0.22, texture2D(u_q, vec2(uv.x, 1.0 - uv.y)).r)));',\n    '}'].join('\\n');\n\n  function sh(t, s) { var o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o);\n    if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }\n  function prog(fs) { var p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));\n    gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; }\n  function tex(filter) { var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);\n    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);\n    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; }\n  var p1 = prog(FS1), p2 = prog(FS2);\n  var buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);\n  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);\n  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);\n  var tSrc = tex(gl.NEAREST), tLo = tex(gl.LINEAR), tHi = tex(gl.LINEAR), tQ = tex(gl.LINEAR);\n  var fb = gl.createFramebuffer();\n  var U1 = { src: gl.getUniformLocation(p1, 'u_src'), size: gl.getUniformLocation(p1, 'u_size'), which: gl.getUniformLocation(p1, 'u_which') };\n  var U2 = {}; ['u_src', 'u_lo', 'u_hi', 'u_q', 'u_size', 'u_a', 'u_b', 'u_outH', 'u_k', 'u_t'].forEach(function (n) { U2[n] = gl.getUniformLocation(p2, n); });\n  var maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE), vp = gl.getParameter(gl.MAX_VIEWPORT_DIMS);\n  var maxOut = Math.min(vp[0], vp[1], gl.getParameter(gl.MAX_RENDERBUFFER_SIZE));\n\n  return function run(src, rw, rh, ow, oh, a, b, k, t) {\n    if (rw > maxTex || rh > maxTex || ow > maxOut || oh > maxOut) throw new Error('too large');\n    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);\n    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tSrc);\n    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);\n    // pass 1 (x2): ink map and paper map at source resolution\n    gl.useProgram(p1); gl.uniform1i(U1.src, 0); gl.uniform2f(U1.size, rw, rh);\n    gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, rw, rh);\n    [[tLo, 0], [tHi, 1], [tQ, 2]].forEach(function (pair) {\n      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pair[0]);\n      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, rw, rh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);\n      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pair[0], 0);\n      gl.uniform1f(U1.which, pair[1]); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);\n    });\n    gl.bindFramebuffer(gl.FRAMEBUFFER, null);\n    // pass 2: output\n    gl.useProgram(p2);\n    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tSrc);\n    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tLo);\n    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, tHi);\n    gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, tQ);\n    gl.uniform1i(U2.u_src, 0); gl.uniform1i(U2.u_lo, 1); gl.uniform1i(U2.u_hi, 2); gl.uniform1i(U2.u_q, 3);\n    gl.uniform2f(U2.u_size, rw, rh); gl.uniform2f(U2.u_a, a[0], a[1]); gl.uniform2f(U2.u_b, b[0], b[1]);\n    gl.uniform1f(U2.u_outH, oh); gl.uniform1f(U2.u_k, k); gl.uniform1f(U2.u_t, t);\n    gl.viewport(0, 0, ow, oh); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);\n  };\n}\n";
-    var WORKER_SRC = PIPELINE + [
-      '',
-      'var cv = null, run = null;',
-      'function init(){',
-      '  cv = new OffscreenCanvas(1, 1);',
-      '  var gl = cv.getContext("webgl", { premultipliedAlpha: true, antialias: false, alpha: true });',
-      '  if (!gl) throw new Error("no webgl in worker");',
-      '  run = makeEnhancer(gl);',
-      '}',
-      'onmessage = function (e) { var j = e.data;',
-      '  if (j.warm) { try { if (!run) init(); postMessage({ warm: true }); } catch (err) { postMessage({ warm: true, error: String(err) }); } return; }',
-      '  try {',
-      '    if (!run) init();',
-      '    cv.width = j.ow; cv.height = j.oh;',
-      '    run(j.bmp, j.rw, j.rh, j.ow, j.oh, j.a, j.b, 0.25, 0.42);',
-      '    var out = cv.transferToImageBitmap(); j.bmp.close();',
-      '    postMessage({ key: j.key, bmp: out }, [out]);',
-      '  } catch (err) { try { j.bmp.close(); } catch (x) {} postMessage({ key: j.key, error: String(err) }); }',
-      '};'
-    ].join('\n');
-
-    var worker = null, workerOk = false, busy = false;
-    var ready = new Map();          // key -> enhanced ImageBitmap (small LRU)
-    var queue = [];                 // jobs waiting for the worker (newest wins per picture)
-    var known = new Set();          // keys queued, running, ready or failed (never requested twice)
-    var ids = new WeakMap(), nextId = 1;
-    var api = window.__pvEnhancer = { onReady: null };
-
-    function idOf(img) { var id = ids.get(img); if (!id) { id = nextId++; ids.set(img, id); } return id; }
-
-    function start() {
-      if (worker || typeof OffscreenCanvas === 'undefined' || typeof Worker === 'undefined' || typeof createImageBitmap === 'undefined') return;
-      try {
-        worker = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' })));
-        worker.onmessage = function (e) {
-          var r = e.data;
-          if (r.warm) { workerOk = !r.error; if (r.error) console.warn('Image enhancer unavailable:', r.error); return; }
-          busy = false;
-          var doneTile = tilesByKey[r.key]; delete tilesByKey[r.key];
-          if (r.bmp) {
-            api.results = (api.results || 0) + 1;
-            ready.set(r.key, r.bmp);
-            while (ready.size > 48) { var k = ready.keys().next().value; try { ready.get(k).close(); } catch (x) {} ready.delete(k); }
-            if (api.onReady) api.onReady(doneTile);
-          }
-          next();
-        };
-        worker.onerror = function () { workerOk = false; };
-        worker.postMessage({ warm: true });        // GPU setup happens in the worker, off the main thread
-      } catch (e) { workerOk = false; }
-    }
-    // started a moment after the first sharp view, so it never competes with opening
-    window.__pvWarmEnhancer = function () { start(); };
-
-    var tilesByKey = {};
-    function next() {
-      if (busy || !workerOk) return;
-      var j;
-      while ((j = queue.shift()) && j.tile && j.tile.state === 'dropped') { known.delete(j.key); }   // skip tiles gone meanwhile
-      if (!j) return;
-      tilesByKey[j.key] = j.tile;
-      busy = true;
-      createImageBitmap(j.img, j.rx0, j.ry0, j.rw, j.rh).then(function (bmp) {
-        worker.postMessage({ key: j.key, bmp: bmp, rw: j.rw, rh: j.rh, ow: j.ow, oh: j.oh, a: j.a, b: j.b, gain: j.gain }, [bmp]);
-      }, function () { busy = false; next(); });
-    }
-
-    function enhanceDraw(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
-      if (sw < 4 || sh < 4 || !dw || !dh || typeof ctx.getTransform !== 'function') return false;
-      if (typeof ImageBitmap === 'undefined' || !(img instanceof ImageBitmap)) return false;   // only immutable pictures
-      var t = ctx.getTransform();
-      if (Math.abs(t.b) > 1e-6 || Math.abs(t.c) > 1e-6) return false;
-      var Ax = t.a * dw / sw, Ay = t.d * dh / sh;
-      var m = Math.min(Math.abs(Ax), Math.abs(Ay));
-      if (m < 1.5) return false;                                             // not enlarged: nothing to fix
-      var Bx = t.a * (dx - sx * dw / sw) + t.e, By = t.d * (dy - sy * dh / sh) + t.f;
-      var X0 = Ax * sx + Bx, X1 = Ax * (sx + sw) + Bx, Y0 = Ay * sy + By, Y1 = Ay * (sy + sh) + By;
-      var dx0 = Math.min(X0, X1), dx1 = Math.max(X0, X1), dy0 = Math.min(Y0, Y1), dy1 = Math.max(Y0, Y1);
-      var vx0 = Math.max(0, dx0), vx1 = Math.min(ctx.canvas.width, dx1);
-      var vy0 = Math.max(0, dy0), vy1 = Math.min(ctx.canvas.height, dy1);
-      if (vx1 <= vx0 || vy1 <= vy0) return false;
-      var ox0 = Math.floor(vx0), oy0 = Math.floor(vy0);
-      var ow = Math.ceil(vx1) - ox0, oh = Math.ceil(vy1) - oy0;
-      var key = idOf(img) + '|' + [ox0, oy0, ow, oh, Ax.toFixed(5), Ay.toFixed(5), Bx.toFixed(3), By.toFixed(3)].join(',');
-
-      var done = ready.get(key);
-      if (done) {                                                            // enhanced result is ready: cheap draw
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.beginPath();
-        ctx.rect(dx0, dy0, dx1 - dx0, dy1 - dy0);
-        ctx.clip();
-        origDraw.call(ctx, done, ox0, oy0);
-        ctx.restore();
-        return true;
-      }
-      if (!workerOk || known.has(key)) return false;
-      known.add(key);
-      if (known.size > 400) known.clear();
-
-      var imgW = img.width, imgH = img.height;
-      var xa = (vx0 - Bx) / Ax, xb = (vx1 - Bx) / Ax, ya = (vy0 - By) / Ay, yb = (vy1 - By) / Ay;
-      var rx0 = Math.max(Math.floor(Math.min(xa, xb)) - 6, Math.floor(sx), 0);
-      var rx1 = Math.min(Math.ceil(Math.max(xa, xb)) + 6, Math.ceil(sx + sw), imgW);
-      var ry0 = Math.max(Math.floor(Math.min(ya, yb)) - 6, Math.floor(sy), 0);
-      var ry1 = Math.min(Math.ceil(Math.max(ya, yb)) + 6, Math.ceil(sy + sh), imgH);
-      if (rx1 - rx0 < 2 || ry1 - ry0 < 2) return false;
-      var pid = idOf(img);
-      queue.push({
-        key: key, pid: pid, img: img, tile: ctx.canvas.__pvTile || null, rx0: rx0, ry0: ry0, rw: rx1 - rx0, rh: ry1 - ry0, ow: ow, oh: oh,
-        a: [1 / Ax, 1 / Ay], b: [(ox0 - Bx) / Ax - rx0, (oy0 - By) / Ay - ry0],
-        gain: Math.min(16, Math.max(1, m / 1.2))
-      });
-      next();
-      return false;                                                          // standard draw for now
-    }
-
-    CanvasRenderingContext2D.prototype.drawImage = function (img, sx, sy, sw, sh, dx, dy, dw, dh) {
-      if (arguments.length === 9 && this.canvas && this.canvas.__pvSharp && (workerOk || ready.size)) {
-        try { if (enhanceDraw(this, img, sx, sy, sw, sh, dx, dy, dw, dh)) return; }
-        catch (e) { /* standard draw below */ }
-      }
-      return origDraw.apply(this, arguments);
-    };
-  })();
-
-  function loadBytes() {
-    var dataEl = document.getElementById('pdf-data');
-    // The HTML parser stores long text as many small chunks; hand the chunks over without joining them here
-    var chunks = [];
-    for (var n = dataEl.firstChild; n; n = n.nextSibling) chunks.push(n.data);
-    dataEl.textContent = '';                         // release the page's copy
-    function decode(parts) {
-      var bin = atob(parts.join('')), len = bin.length, arr = new Uint8Array(len);
-      for (var i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
-      return arr;
-    }
-    return new Promise(function (resolve) {
-      var done = false;
-      function finish(v) { if (!done) { done = true; resolve(v); } }
-      function fallback() { if (!done) finish(decode(chunks)); }
-      try {
-        var src = 'var parts=[];onmessage=function(e){if(e.data!==null){parts.push(e.data);return;}' +
-                  'var b=atob(parts.join("")),n=b.length,a=new Uint8Array(n);parts=null;' +
-                  'for(var i=0;i<n;i++)a[i]=b.charCodeAt(i);postMessage(a,[a.buffer]);close();};';
-        var w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-        w.onmessage = function (e) { finish(e.data); };
-        w.onerror = function () { fallback(); };
-        // Send the text in ~1 MB batches, one per task, so the page never freezes while handing it over
-        var i = 0;
-        (function sendBatch() {
-          var size = 0, batch = [];
-          while (i < chunks.length && size < 1048576) { batch.push(chunks[i]); size += chunks[i].length; i++; }
-          if (batch.length) w.postMessage(batch.join(''));
-          if (i < chunks.length) setTimeout(sendBatch, 0); else w.postMessage(null);
-        })();
-        setTimeout(fallback, 6000);                  // workers blocked silently: decode here instead
-      } catch (e) { fallback(); }
-    });
-  }
-
-  var docEl = document.querySelector('.document');
-  var pages = Array.prototype.map.call(document.querySelectorAll('.page'), function (el) {
-    return {
-      el: el, num: +el.getAttribute('data-page'),
-      w: +el.getAttribute('data-w'), h: +el.getAttribute('data-h'),
-      base: el.querySelector('canvas.base'), detail: el.querySelector('canvas.detail'),
-      pdfPage: null, baseDone: false, baseCssW: 0, baseRatioUsed: 0,
-      near: false, detailRegion: null, pendingKey: '', detailToken: 0, detailTask: null, baseTask: null
-    };
-  });
-  var pdf = null;
-
-  function getPage(p) {
-    if (p.pdfPage) return Promise.resolve(p.pdfPage);
-    return pdf.getPage(p.num).then(function (pg) { p.pdfPage = pg; return pg; });
-  }
-
-  // ---------- Screen math ----------
-  function pinchScale() { return window.visualViewport ? window.visualViewport.scale : 1; }
-  function devicePxPerCss() { return (window.devicePixelRatio || 1) * pinchScale(); }
-  function baseRatio() { return Math.min(window.devicePixelRatio || 1, 1.5); }
-  function viewRect() {
-    var vv = window.visualViewport;
-    if (vv) return { x: vv.offsetLeft, y: vv.offsetTop, w: vv.width, h: vv.height };
-    return { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
-  }
-
-  function newCanvas(cls, w, h, reuse) {
-    var c = reuse || document.createElement('canvas');
-    c.className = cls;
-    c.removeAttribute('style');
-    c.width = Math.max(1, Math.round(w));
-    c.height = Math.max(1, Math.round(h));
-    var ctx = c.getContext('2d', { alpha: false });
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'low';   // fastest first draw; enlarged pictures are replaced by the enhancer's result
-    return { canvas: c, ctx: ctx };
-  }
-  function emptyCanvas(cls) { var c = document.createElement('canvas'); c.className = cls; c.width = 0; c.height = 0; return c; }
-
-  // ---------- Base layer: whole page (shown while scrolling fast) ----------
-  function baseTargetScale(p, cssW) {
-    var sc = cssW / p.w * baseRatio();
-    var area = p.w * sc * p.h * sc;
-    if (area > MAX_BASE_AREA) sc *= Math.sqrt(MAX_BASE_AREA / area);
-    return sc;
-  }
-  function needsBase(p) {
-    if (!p.near) return false;
-    var cssW = p.el.getBoundingClientRect().width;
-    if (!cssW) return false;
-    if (!p.baseDone) return true;
-    var target = baseTargetScale(p, cssW);
-    return target > p.baseScale * 1.3 || target < p.baseScale * 0.5;
-  }
-
-  var queue = [], busy = false;
-  function enqueue(p) { if (queue.indexOf(p) < 0) queue.push(p); pump(); }
-  var activeSharp = 0;
-  function whenIdle(fn) {
-    if (window.requestIdleCallback) requestIdleCallback(fn, { timeout: 1000 });
-    else setTimeout(fn, 150);
-  }
-  function pump() {
-    if (busy || !pdf || activeSharp > 0) return;
-    queue = queue.filter(needsBase);
-    if (!queue.length) return;
-    var view = viewRect(), pick = 0;
-    for (var i = 0; i < queue.length; i++) {
-      var r = queue[i].el.getBoundingClientRect();
-      if (r.bottom > view.y && r.top < view.y + view.h) { pick = i; break; }
-    }
-    var p = queue.splice(pick, 1)[0];
-    busy = true;
-    whenIdle(function () {
-      if (!p.near || activeSharp > 0) { busy = false; if (p.near) queue.unshift(p); return; }
-      renderBase(p).then(done, done);
-    });
-    function done() { busy = false; pump(); }
-  }
-
-  function renderBase(p) {
-    return getPage(p).then(function (page) {
-      var cssW = p.el.getBoundingClientRect().width;
-      var ratio = baseRatio();
-      var scale = baseTargetScale(p, cssW);
-      var vp = page.getViewport({ scale: scale });
-      var made = newCanvas('base', vp.width, vp.height);
-      p.baseTask = page.render({ canvasContext: made.ctx, viewport: vp });
-      return p.baseTask.promise.then(function () {
-        p.baseTask = null;
-        if (!p.near) return;
-        p.el.replaceChild(made.canvas, p.base);
-        p.base = made.canvas;
-        p.baseDone = true;
-        p.baseScale = scale;
-        p.el.classList.add('pv-ready');
-        p.baseCssW = cssW;
-        p.baseRatioUsed = ratio;
-      });
-    });
-  }
-
-  function releasePage(p) {
-    if (p.baseTask) { try { p.baseTask.cancel(); } catch (e) {} p.baseTask = null; }
-    clearDetail(p);
-    p.spare = null;
-    if (p.pdfPage) { try { p.pdfPage.cleanup(); } catch (e) {} }
-    if (p.baseDone) {
-      var c = emptyCanvas('base');
-      p.el.replaceChild(c, p.base);
-      p.base = c;
-      p.baseDone = false;
-      p.el.classList.remove('pv-ready');
-    }
-  }
-
-  // ---------- Sharp layer: tiles at exactly 1 render pixel = 1 screen pixel ----------
-  // The view is covered by 1024 px tiles on a grid aligned to whole screen pixels. Visible tiles render first,
-  // then a ring around the view is prepared in advance, so panning shows sharp content that is already there.
-  var TILE = 1024, TILE_BUDGET = 32e6, PREFETCH = 0.35;
-  var tileQueue = [], tileBusy = false, tilePixels = 0, tileFrame = 0, currentTile = null, panning = false;
-
-  function dropTile(t) {
-    if (t.task) { try { t.task.cancel(); } catch (e) {} t.task = null; }
-    if (t.canvas) { if (t.canvas.parentNode) t.canvas.parentNode.removeChild(t.canvas); tilePixels -= t.canvas.width * t.canvas.height; t.canvas = null; }
-    t.state = 'dropped';
-    delete t.set.tiles[t.key];
-  }
-  function dropSet(set) { Object.keys(set.tiles).forEach(function (k) { dropTile(set.tiles[k]); }); }
-
-  function clearDetail(p) {                      // release every tile of a page
-    if (p.tset) { dropSet(p.tset); p.tset = null; }
-    (p.oldSets || []).forEach(dropSet); p.oldSets = [];
-  }
-  function stopDetailRender(p) {                 // zoom changed: the tile being drawn is outdated
-    if (p.tset) Object.keys(p.tset.tiles).forEach(function (k) {
-      var t = p.tset.tiles[k];
-      if (t.task) { try { t.task.cancel(); } catch (e) {} }
-    });
-  }
-
-  function tileSetFor(p, r, view, zf) {
-    var scale = r.width / p.w * zf;                          // device px per PDF point
-    var cur = p.tset;
-    if (cur && Math.abs(cur.scale - scale) / scale < 1e-4) return cur;
-    if (!p.oldSets) p.oldSets = [];
-    if (cur) p.oldSets.push(cur);                            // keep showing until the new level covers the view
-    var ox = (r.left - view.x) * zf, oy = (r.top - view.y) * zf;
-    p.tset = { scale: scale, devW: r.width * zf, devH: r.height * zf,
-               px: ox - Math.floor(ox), py: oy - Math.floor(oy),   // grid phase: tile edges on whole screen pixels
-               tiles: {}, visKeys: [] };
-    return p.tset;
-  }
-
-  function updateDetails() {
-    if (!pdf) return;
-    var zf = devicePxPerCss(), view = viewRect(), want = [];
-    var mx = view.w * PREFETCH, my = view.h * PREFETCH, frame = ++tileFrame;
-    var cxv = view.x + view.w / 2, cyv = view.y + view.h / 2;
-    pages.forEach(function (p) {
-      var r = p.el.getBoundingClientRect();
-      var near = r.width && !(r.bottom <= view.y - my || r.top >= view.y + view.h + my ||
-                              r.right <= view.x - mx || r.left >= view.x + view.w + mx);
-      if (!p.near || !near) { clearDetail(p); return; }
-      var s = tileSetFor(p, r, view, zf);
-      var nx = Math.ceil((s.devW + s.px) / TILE), ny = Math.ceil((s.devH + s.py) / TILE);
-      function rng(x0, y0, x1, y1) {
-        return {
-          x0: Math.max(0, Math.floor(((x0 - r.left) * zf + s.px) / TILE)),
-          x1: Math.min(nx - 1, Math.floor(((x1 - r.left) * zf + s.px - 0.01) / TILE)),
-          y0: Math.max(0, Math.floor(((y0 - r.top) * zf + s.py) / TILE)),
-          y1: Math.min(ny - 1, Math.floor(((y1 - r.top) * zf + s.py - 0.01) / TILE))
-        };
-      }
-      var vr = rng(view.x, view.y, view.x + view.w, view.y + view.h);
-      var pr = rng(view.x - mx, view.y - my, view.x + view.w + mx, view.y + view.h + my);
-      s.visKeys = [];
-      for (var ty = pr.y0; ty <= pr.y1; ty++) {
-        for (var tx = pr.x0; tx <= pr.x1; tx++) {
-          var key = tx + ',' + ty, t = s.tiles[key];
-          var inView = tx >= vr.x0 && tx <= vr.x1 && ty >= vr.y0 && ty <= vr.y1;
-          if (!t) t = s.tiles[key] = { key: key, tx: tx, ty: ty, set: s, page: p, canvas: null, task: null, state: 'new' };
-          t.frame = frame;
-          if (inView) s.visKeys.push(key);
-          t.inView = inView;
-          if ((t.state === 'new' || t.state === 'redo') && (inView || !panning)) {
-            var tcx = r.left + ((tx + 0.5) * TILE - s.px) / zf, tcy = r.top + ((ty + 0.5) * TILE - s.py) / zf;
-            want.push({ t: t, prio: (inView ? 0 : 1e7) + (t.state === 'redo' ? 0 : 1) + Math.hypot(tcx - cxv, tcy - cyv) });
-          }
-        }
-      }
-      Object.keys(s.tiles).forEach(function (k) { if (s.tiles[k].frame !== frame) dropTile(s.tiles[k]); });
-      retireOld(p);
-    });
-    want.sort(function (a, b) { return a.prio - b.prio; });
-    tileQueue = want.map(function (w) { return w.t; });
-    if (currentTile && !currentTile.inView && tileQueue.length && tileQueue[0].inView && currentTile.task) {
-      try { currentTile.task.cancel(); } catch (e) {}
-    }
-    // stay within the memory budget: drop farthest tiles that are not visible
-    if (tilePixels > TILE_BUDGET) {
-      var all = [];
-      pages.forEach(function (p) { if (p.tset) Object.keys(p.tset.tiles).forEach(function (k) {
-        var t = p.tset.tiles[k]; if (t.canvas && p.tset.visKeys.indexOf(k) < 0) all.push(t); }); });
-      all.sort(function (a, b) { return b.tx + b.ty - a.tx - a.ty; });
-      while (tilePixels > TILE_BUDGET && all.length) dropTile(all.shift());
-    }
-    pumpTiles();
-  }
-
-  function retireOld(p) {                        // old zoom level disappears once the new one covers the view
-    if (!p.oldSets || !p.oldSets.length || !p.tset) return;
-    var s = p.tset;
-    var covered = s.visKeys.length && s.visKeys.every(function (k) { var t = s.tiles[k]; return t && t.canvas; });
-    if (covered) { p.oldSets.forEach(dropSet); p.oldSets = []; }
-  }
-
-  function pumpTiles() {
-    if (tileBusy || !pdf) return;
-    var t;
-    while ((t = tileQueue.shift())) {
-      if (t.state !== 'dropped' && t.page.tset === t.set && (t.state === 'new' || t.state === 'redo')) break;
-    }
-    if (!t) return;
-    renderTile(t);
-  }
-
-  function renderTile(t) {
-    var p = t.page, s = t.set, redo = t.state === 'redo';
-    t.state = 'rendering';
-    tileBusy = true; activeSharp++; currentTile = t;
-    var finished = false;
-    function settle() { if (!finished) { finished = true; tileBusy = false; currentTile = null; activeSharp--; pumpTiles(); pump(); } }
-    getPage(p).then(function (page) {
-      if (t.state === 'dropped' || p.tset !== s) { settle(); return; }
-      var X0 = t.tx * TILE - s.px, Y0 = t.ty * TILE - s.py;
-      var w = Math.ceil(Math.min(TILE, s.devW - X0)), h = Math.ceil(Math.min(TILE, s.devH - Y0));
-      var made = newCanvas('tile', w, h);
-      made.canvas.__pvSharp = true;
-      made.canvas.__pvTile = t;
-      var task = page.render({ canvasContext: made.ctx, viewport: page.getViewport({ scale: s.scale }), transform: [1, 0, 0, 1, -X0, -Y0] });
-      t.task = task;
-      task.promise.then(function () {
-        t.task = null;
-        if (t.state === 'dropped' || p.tset !== s) { settle(); return; }
-        var st = made.canvas.style;
-        st.left = (X0 / s.devW * 100) + '%'; st.top = (Y0 / s.devH * 100) + '%';
-        st.width = (w / s.devW * 100) + '%'; st.height = (h / s.devH * 100) + '%';
-        if (t.canvas) { p.el.replaceChild(made.canvas, t.canvas); tilePixels -= t.canvas.width * t.canvas.height; }
-        else p.el.appendChild(made.canvas);
-        tilePixels += w * h;
-        t.canvas = made.canvas; t.state = 'done';
-        p.el.classList.add('pv-ready');
-        if (window.__pvWarmEnhancer) { var warm = window.__pvWarmEnhancer; window.__pvWarmEnhancer = null; setTimeout(warm, 1500); }
-        retireOld(p);
-        settle();
-      }, function () {
-        t.task = null;
-        if (t.state === 'rendering') t.state = t.canvas ? (redo ? 'redo' : 'done') : 'new';
-        settle();
-      });
-    }).catch(function (e) { console.warn('Tile render failed:', e); if (t.state === 'rendering') t.state = 'new'; settle(); });
-  }
-
-  // ---------- Layout: fit width / fit page / custom zoom ----------
-  // Always opens showing the full page; zoom is never remembered between visits
-  var state = { mode: 'fit-page', zoom: 1 };
-  try { localStorage.removeItem('pdfview-state'); } catch (e) {}
-  function saveState() {}
-
-  function availW() {
-    var cs = getComputedStyle(docEl);
-    return document.documentElement.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  }
-  function availH() { return document.documentElement.clientHeight - 24; }
-  function pageWidthFor(p, aw, ah) {
-    if (state.mode === 'fit-width') return aw;
-    if (state.mode === 'fit-page') return Math.min(aw, ah * p.w / p.h);
-    return p.w * PT_TO_CSS * state.zoom;
-  }
-
-  function anchorAt(cx, cy) {
-    var view = viewRect();
-    if (cx == null) { cx = view.x + view.w / 2; cy = view.y + view.h / 2; }
-    var best = null, bestD = Infinity;
-    for (var i = 0; i < pages.length; i++) {
-      var r = pages[i].el.getBoundingClientRect();
-      var d = cy < r.top ? r.top - cy : (cy > r.bottom ? cy - r.bottom : 0);
-      if (d < bestD) { bestD = d; best = { p: pages[i], r: r }; }
-      if (d === 0) break;
-    }
-    if (!best || !best.r.width) return null;
-    return { p: best.p, fx: (cx - best.r.left) / best.r.width, fy: (cy - best.r.top) / best.r.height, cx: cx, cy: cy };
-  }
-  // Extra blank margin used only while zoomed, so a zoom point can stay put even at the document edges
-  var slack = { l: 0, t: 0, r: 0, b: 0 }, padX = 0, padT = 0, padB = 0, baseDocW = 0;
-  function applySlack() {
-    var st = docEl.style;
-    st.paddingLeft = (padX + slack.l) + 'px';
-    st.paddingRight = (padX + slack.r) + 'px';
-    st.paddingTop = (padT + slack.t) + 'px';
-    st.paddingBottom = (padB + slack.b) + 'px';
-    st.width = (baseDocW + slack.l + slack.r) + 'px';
-  }
-
-  function restoreAnchor(a) {
-    if (!a) return;
-    var r = a.p.el.getBoundingClientRect();
-    var dx = r.left + a.fx * r.width - a.cx, dy = r.top + a.fy * r.height - a.cy;
-    if (state.mode === 'custom') {
-      var root = document.documentElement, sx = window.scrollX, sy = window.scrollY, changed = false, u;
-      // content must move right/down more than scrolling allows -> add margin before it
-      if (dx < -sx) { slack.l += -dx - sx; dx = -sx; changed = true; }
-      else if (dx > 0 && slack.l > 0) { u = Math.min(slack.l, dx); slack.l -= u; dx -= u; changed = true; }
-      if (dy < -sy) { slack.t += -dy - sy; dy = -sy; changed = true; }
-      else if (dy > 0 && slack.t > 0) { u = Math.min(slack.t, dy); slack.t -= u; dy -= u; changed = true; }
-      if (changed) applySlack();
-      // not enough room to scroll right/down -> add margin after it
-      var maxX = root.scrollWidth - root.clientWidth, maxY = root.scrollHeight - root.clientHeight;
-      var grow = false;
-      if (sx + dx > maxX) { slack.r += sx + dx - maxX; grow = true; }
-      if (sy + dy > maxY) { slack.b += sy + dy - maxY; grow = true; }
-      if (grow) applySlack();
-    }
-    window.scrollBy(dx, dy);
-  }
-
-  function layout(anchor) {
-    var a = anchor || anchorAt(null);
-    // --- read everything once ---
-    var st = docEl.style;
-    st.paddingLeft = st.paddingRight = st.paddingTop = st.paddingBottom = '';
-    var cs = getComputedStyle(docEl);
-    padX = parseFloat(cs.paddingLeft) || 0; padT = parseFloat(cs.paddingTop) || 0; padB = parseFloat(cs.paddingBottom) || 0;
-    var vw = document.documentElement.clientWidth;
-    var aw = vw - 2 * padX, ah = availH();
-    var widths = pages.map(function (p) { return pageWidthFor(p, aw, ah); });
-    var maxW = Math.max.apply(null, widths.concat([0]));
-    if (state.mode !== 'custom') slack = { l: 0, t: 0, r: 0, b: 0 };
-    baseDocW = Math.max(vw, maxW + 2 * padX);
-    var centre = (baseDocW - 2 * padX - maxW) / 2;
-
-    // --- write everything ---
-    applySlack();
-    pages.forEach(function (p, i) {
-      var w = widths[i] + 'px', ml = (centre + (maxW - widths[i]) / 2) + 'px';
-      if (p.el.style.width !== w) p.el.style.width = w;
-      if (p.el.style.marginLeft !== ml) p.el.style.marginLeft = ml;
-    });
-    document.documentElement.classList.toggle('pv-zoomed', state.mode === 'custom');
-    restoreAnchor(a);
-    updateUI();
-    schedule();
-  }
-
-  function currentPage() { var a = anchorAt(null); return a ? a.p : pages[0]; }
-  function currentZoom() {
-    var p = currentPage();
-    return p.el.getBoundingClientRect().width / (p.w * PT_TO_CSS);
-  }
-  var zoomFrame = 0, pendingAnchor = null;
-  function setZoom(z, anchor) {
-    state = { mode: 'custom', zoom: Math.min(MAX_Z, Math.max(MIN_Z, z)) };
-    if (anchor || !pendingAnchor) pendingAnchor = anchor || anchorAt(null);
-    pages.forEach(stopDetailRender);                  // outdated the moment zoom changes
-    if (zoomFrame) return;
-    zoomFrame = requestAnimationFrame(function () {
-      zoomFrame = 0;
-      var a = pendingAnchor; pendingAnchor = null;
-      layout(a);
-    });
-  }
-  // Within one continuous zoom gesture keep pinning the exact same spot of the page
-  // (re-measuring each step would let tiny pixel-rounding errors add up and drift)
-  var gesture = null;
-  function gestureAnchor(x, y) {
-    var now = Date.now();
-    if (!gesture || now - gesture.t > 400 || Math.abs(gesture.x - x) > 2 || Math.abs(gesture.y - y) > 2) {
-      gesture = { a: anchorAt(x, y), x: x, y: y, t: now };
-    }
-    gesture.t = now;
-    return gesture.a;
-  }
-  window.addEventListener('scroll', function () { if (gesture && Date.now() - gesture.t > 60) gesture = null; }, { passive: true });
-
-  function stepZoom(dir) {
-    var z = state.mode === 'custom' && zoomFrame ? state.zoom : currentZoom(), next = dir > 0 ? MAX_Z : MIN_Z, i;
-    if (dir > 0) { for (i = 0; i < ZOOM_STEPS.length; i++) if (ZOOM_STEPS[i] > z * 1.01) { next = ZOOM_STEPS[i]; break; } }
-    else { for (i = ZOOM_STEPS.length - 1; i >= 0; i--) if (ZOOM_STEPS[i] < z * 0.99) { next = ZOOM_STEPS[i]; break; } }
-    var v = viewRect();
-    setZoom(next, gestureAnchor(v.x + v.w / 2, v.y + v.h / 2));
-  }
-  function setMode(m) {
-    var p = currentPage();
-    state = { mode: m, zoom: state.zoom };
-    saveState();
-    layout();
-    if (m === 'fit-page') goTo(p.num);
-  }
-  function goTo(n) {
-    n = Math.min(pages.length, Math.max(1, n));
-    pages[n - 1].el.scrollIntoView({ block: state.mode === 'fit-page' ? 'center' : 'start' });
-  }
-
-  // ---------- Minimal styles (no on-screen toolbar) ----------
-  var css = document.createElement('style');
-  css.textContent = 'html,body{overflow-anchor:none}.page{margin-right:0!important}' +
-    '@media print{.document{width:auto!important}.page{margin-left:0!important}.page canvas.tile{display:none}}' +
-    'html.pv-zoomed .page{box-shadow:none;outline:1px solid rgba(0,0,0,.14)}';   // soft shadows are costly on huge zoomed pages
-  document.head.appendChild(css);
-
-  function toggleFullscreen() {
-    var d = document, el = d.documentElement;
-    if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
-    else if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  }
-  function updateUI() {}
-
-  // ---------- Keyboard, clicker and Ctrl+wheel ----------
-  function hasHorizontalScroll() { return document.documentElement.scrollWidth > document.documentElement.clientWidth + 1; }
-  window.addEventListener('keydown', function (e) {
-    var t = e.target;
-    if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) return;
-    if (e.ctrlKey || e.metaKey) {
-      if (e.key === '+' || e.key === '=') { e.preventDefault(); stepZoom(1); }
-      else if (e.key === '-') { e.preventDefault(); stepZoom(-1); }
-      else if (e.key === '0') { e.preventDefault(); setMode('fit-page'); }
-      return;
-    }
-    if (e.altKey) return;
-    var k = e.key;
-    if (k === 'f' || k === 'F') { toggleFullscreen(); return; }
-    if (k === '+' || k === '=') { stepZoom(1); return; }
-    if (k === '-') { stepZoom(-1); return; }
-    var fitPage = state.mode === 'fit-page';
-    if ((k === 'PageDown' && fitPage) || (k === 'ArrowRight' && !hasHorizontalScroll())) { e.preventDefault(); goTo(currentPage().num + 1); }
-    else if ((k === 'PageUp' && fitPage) || (k === 'ArrowLeft' && !hasHorizontalScroll())) { e.preventDefault(); goTo(currentPage().num - 1); }
-    else if (k === 'Home' && fitPage) { e.preventDefault(); goTo(1); }
-    else if (k === 'End' && fitPage) { e.preventDefault(); goTo(pages.length); }
-  });
-
-  // Ctrl+wheel and trackpad pinch zoom into the spot under the cursor, re-rendered sharp
-  window.addEventListener('wheel', function (e) {
-    if (!e.ctrlKey) return;
-    e.preventDefault();
-    var dy = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
-    var base = state.mode === 'custom' && zoomFrame ? state.zoom : currentZoom();
-    setZoom(base * Math.exp(-dy * 0.0025), gestureAnchor(e.clientX, e.clientY));
-  }, { passive: false });
-
-  // When the background enhancer finishes, redraw the visible area (it now uses the ready result)
-  if (window.__pvEnhancer) {
-    var enhTimer = null;
-    window.__pvEnhancer.onReady = function (tile) {
-      if (tile && tile.state === 'done') tile.state = 'redo';   // redraw just this tile with the enhanced picture
-      clearTimeout(enhTimer);
-      enhTimer = setTimeout(updateDetails, 30);
-    };
-  }
-
-  // ---------- Wiring ----------
-  var timer = null;
-  function schedule() {
-    clearTimeout(timer);
-    timer = setTimeout(function () {
-      lastTileUpdate = Date.now();
-      panning = false;
-      updateDetails();                                 // sharp on-screen view first, then the ring around it
-      pages.forEach(function (p) { if (needsBase(p)) enqueue(p); });
-    }, 120);
-  }
-  var lastTileUpdate = 0;
-  function onScroll() {
-    panning = true;
-    schedule();
-    var now = Date.now();
-    if (now - lastTileUpdate > 200) { lastTileUpdate = now; updateDetails(); }   // keep tiles coming during a long pan
-  }
-
-  var io = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      var p = pages[+e.target.getAttribute('data-page') - 1];
-      p.near = e.isIntersecting;
-      if (!p.near) releasePage(p);
-    });
-    updateDetails();                 // sharp view of what's on screen first
-    pages.forEach(function (p) { if (needsBase(p)) enqueue(p); });
-  }, { rootMargin: KEEP_MARGIN });
-
-  window.addEventListener('scroll', onScroll, { passive: true });
-  var lastW = document.documentElement.clientWidth, lastH = document.documentElement.clientHeight;
-  window.addEventListener('resize', function () {
-    var w = document.documentElement.clientWidth, h = document.documentElement.clientHeight;
-    var changed = w !== lastW || Math.abs(h - lastH) > 80;   // ignore small height wobble (browser bars)
-    lastW = w; if (changed) lastH = h;
-    if (changed && state.mode !== 'custom') layout(); else schedule();
-  });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', schedule);
-    window.visualViewport.addEventListener('scroll', schedule);
-  }
-
-  layout();
-
-  // Let the page shell paint first, then start the heavy work
-  function afterPaint() {
-    return new Promise(function (r) { requestAnimationFrame(function () { setTimeout(r, 0); }); });
-  }
-  var bytesPromise;
-  afterPaint().then(function () {
-    bytesPromise = loadBytes();
-    return prepareWorker();
-  }).then(function () {
-    return bytesPromise;
-  }).then(function (bytes) {
-    return pdfjsLib.getDocument({
-      data: bytes,
-      cMapUrl: CDN + 'cmaps/', cMapPacked: true,
-      standardFontDataUrl: CDN + 'standard_fonts/',
-      canvasMaxAreaInBytes: 200000000,              // 50 MP: no giant test canvases inside PDF.js
-      verbosity: pdfjsLib.VerbosityLevel.ERRORS
-    }).promise;
-  }).then(function (doc) {
-    pdf = doc;
-    pages.forEach(function (p) { io.observe(p.el); });
-    pump();
-  }, function (err) {
-    console.error(err);
-    var m = document.createElement('p');
-    m.className = 'load-error';
-    m.textContent = 'This document could not be displayed.';
-    document.body.insertBefore(m, document.body.firstChild);
-  });
-})();
-    </script>
-
-    <script>
-        const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_CDN + 'pdf.worker.min.js';
-
-        // DOM Elements
-        const uploadView = document.getElementById('uploadView');
-        const progressView = document.getElementById('progressView');
-        const successView = document.getElementById('successView');
-        const errorBox = document.getElementById('errorBox');
-        const errorMessage = document.getElementById('errorMessage');
-        const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('fileInput');
-        const progressBar = document.getElementById('progressBar');
-        const percentText = document.getElementById('percentText');
-        const pageCounter = document.getElementById('pageCounter');
-        const statusTitle = document.getElementById('statusTitle');
-        const resetBtn = document.getElementById('resetBtn');
-
-        let originalFileName = "";
-
-        function showError(msg) {
-            errorMessage.textContent = msg;
-            errorBox.classList.remove('hidden');
-            progressView.classList.add('hidden');
-            successView.classList.add('hidden');
-            uploadView.classList.remove('hidden');
-        }
-        function hideError() { errorBox.classList.add('hidden'); }
-
-        function setProgress(percent, label) {
-            progressBar.style.width = `${percent}%`;
-            percentText.textContent = `${percent}%`;
-            if (label) pageCounter.textContent = label;
-        }
-
-        dropzone.addEventListener('click', () => { hideError(); fileInput.click(); });
-        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dropzone-active'); });
-        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dropzone-active'));
-        dropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            hideError();
-            dropzone.classList.remove('dropzone-active');
-            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-        });
-        fileInput.addEventListener('change', (e) => {
-            hideError();
-            if (e.target.files.length) handleFile(e.target.files[0]);
-        });
-
-        resetBtn.addEventListener('click', () => {
-            successView.classList.add('hidden');
-            progressView.classList.add('hidden');
-            uploadView.classList.remove('hidden');
-            fileInput.value = '';
-            setProgress(0);
-            hideError();
-        });
-
-        // ---------- Helpers ----------
-        // Makes code safe to place inside a script block
-        function escapeForScript(code) {
-            // Note: the comment-opener is written as '<\!--' so the browser never sees it inside this script
-            return code.replace(/<\/script/gi, '<\\/script').replace(/<\!--/g, '<\\!--');
-        }
-
-        // PDF.js normally measures the largest usable canvas by creating giant test canvases (up to 32767 px)
-        // the first time it meets a big picture. That stalls the graphics thread for a moment. We give it the
-        // known-safe limit instead. If the code ever looks different (other PDF.js version), it is left untouched.
-        function tuneWorker(code) {
-            return code.replace('this._guessMax(2048,65537,0,1)', '16384');
-        }
-
-        function escapeHtml(str) {
-            return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-
-        let pdfjsSources = null;
-        async function getPdfJsSources() {
-            if (pdfjsSources) return pdfjsSources;
-            try {
-                const grab = async (name) => {
-                    const r = await fetch(PDFJS_CDN + name);
-                    if (!r.ok) throw new Error(name);
-                    return r.text();
-                };
-                const [lib, worker] = await Promise.all([grab('pdf.min.js'), grab('pdf.worker.min.js')]);
-                pdfjsSources = { lib, worker };
-            } catch (e) {
-                console.warn('Could not embed PDF.js; output will load it from the CDN instead.', e);
-                return null;
-            }
-            return pdfjsSources;
-        }
-
-        function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
-                const r = new FileReader();
-                r.onload = () => resolve(r.result.slice(r.result.indexOf(',') + 1));
-                r.onerror = () => reject(r.error);
-                r.readAsDataURL(file);
-            });
-        }
-
-        // ---------- Conversion ----------
-        async function handleFile(file) {
-            if (file.type !== 'application/pdf') {
-                showError('Please upload a valid PDF document.');
-                return;
-            }
-            originalFileName = file.name.replace(/\.[^/.]+$/, "");
-
-            uploadView.classList.add('hidden');
-            progressView.classList.remove('hidden');
-            statusTitle.textContent = 'Reading PDF...';
-            setProgress(0, 'Preparing...');
-
-            try {
-                const sources = await getPdfJsSources();
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({
-                    data: arrayBuffer,
-                    verbosity: pdfjsLib.VerbosityLevel.ERRORS
-                }).promise;
-                const numPages = pdf.numPages;
-                const sections = [];
-
-                // Measure every page (exact size + rotation) so the layout matches the PDF 1:1
-                statusTitle.textContent = 'Mapping Pages...';
-                async function processPage(pageNum) {
-                    if (pageNum > numPages) return;
-                    const page = await pdf.getPage(pageNum);
-                    const vp = page.getViewport({ scale: 1.0 });
-                    sections.push(`\n<section class="page" data-page="${pageNum}" data-w="${vp.width}" data-h="${vp.height}" aria-label="Page ${pageNum}" style="width:min(100%, ${vp.width}px); aspect-ratio:${vp.width} / ${vp.height};"><canvas class="base" width="0" height="0"></canvas><canvas class="detail" width="0" height="0"></canvas></section>`);
-                    page.cleanup();
-                    setProgress(Math.round(pageNum / numPages * 70), `Page ${pageNum} of ${numPages}`);
-                    if (pageNum % 20 === 0) await new Promise(r => setTimeout(r, 0));
-                    await processPage(pageNum + 1);
-                }
-                await processPage(1);
-                await pdf.destroy();
-
-                statusTitle.textContent = 'Embedding Render Engine...';
-                setProgress(80, 'Engine');
-
-                statusTitle.textContent = 'Packaging Output...';
-                setProgress(90, 'Packing');
-                const base64 = await fileToBase64(file);
-
-                setProgress(100, 'Complete');
-                triggerAutoDownload(sections, sources, base64);
-            } catch (error) {
-                console.error("Conversion Error:", error);
-                showError("Failed to process PDF. It may be corrupted or password protected.");
-            }
-        }
-
-        function triggerAutoDownload(sections, sources, base64) {
-            const title = escapeHtml(originalFileName);
-            const htmlHeader = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} - Converted from PDF</title>
-<style>
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #ececec; }
-  body { font-family: Arial, Helvetica, sans-serif; }
-  .document { width: max-content; min-width: 100%; padding: 24px 12px 48px; }
-  .page {
-    position: relative;
-    margin: 0 auto 24px;
-    background: #fff;
-    box-shadow: 0 2px 12px rgba(0,0,0,.18);
-    overflow: hidden;
-  }
-  .page canvas { position: absolute; display: block; pointer-events: none; }
-  .page canvas.base { left: 0; top: 0; width: 100%; height: 100%; }
-  .load-error { text-align: center; color: #b91c1c; padding: 16px; }
-  @media (max-width: 640px) {
-    .document { padding: 0; }
-    .page { margin: 0 auto 8px; box-shadow: none; }
-  }
-  @media print {
-    html, body { background: #fff; }
-    .document { width: auto; min-width: 0; padding: 0; }
-    .page { width: 100% !important; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
-    .page:last-child { page-break-after: auto; break-after: auto; }
-    .page canvas.detail { display: none; }
-  }
-</style>
 </head>
 <body>
-<main class="document" aria-label="Converted PDF document">`;
+    <main class="shell">
+        <section class="intro">
+            <h1>Turn a PDF into a zoomable page</h1>
+            <p class="lead">Made for smartboards. Open the result in any browser, zoom as far as you need, and your notes stay sharp.</p>
+            <ul class="facts">
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5M11 8.5v5M8.5 11h5"/></svg>
+                    <span>Text and diagrams are redrawn crisp at every zoom level</span>
+                </li>
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="11.5" rx="1.5"/><path d="M8 20h8M12 16.5V20"/></svg>
+                    <span>One HTML file that opens offline, even on the classroom board</span>
+                </li>
+                <li>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>
+                    <span>Your PDF is converted on this computer and never uploaded</span>
+                </li>
+            </ul>
+        </section>
 
-            const engineParts = sources
-                ? [`\n<script>${escapeForScript(sources.lib)}<\/script>`,
-                   `\n<script type="text/plain" id="pdfjs-worker">${escapeForScript(tuneWorker(sources.worker))}<\/script>`]
-                : [`\n<script src="${PDFJS_CDN}pdf.min.js"><\/script>`];
+        <section class="stage" aria-live="polite">
+            <div class="sheet">
 
-            const runtime = document.getElementById('viewerRuntime').textContent;
+                <!-- Upload View -->
+                <div id="uploadView" style="display:flex;flex-direction:column;flex:1">
+                    <h2>Add your notes</h2>
+                    <p class="muted">You'll get an HTML file with the same name.</p>
 
-            const blobParts = [
-                htmlHeader,
-                ...sections,
-                `\n</main>`,
-                `\n<script type="application/octet-stream" id="pdf-data">`, base64, `<\/script>`,
-                ...engineParts,
-                `\n<script>${escapeForScript(runtime)}<\/script>`,
-                `\n</body>\n</html>`
-            ];
-            const blob = new Blob(blobParts, { type: 'text/html' });
+                    <div id="dropzone" role="button" tabindex="0" aria-label="Choose a PDF file or drop it here">
+                        <input type="file" id="fileInput" accept="application/pdf" class="hidden" />
+                        <p class="drop-title">Drop a PDF here</p>
+                        <span class="btn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>
+                            Choose PDF
+                        </span>
+                        <p class="small">One file at a time. Big PDFs take a few seconds.</p>
+                    </div>
 
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${originalFileName}.html`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-
-            progressView.classList.add('hidden');
-            successView.classList.remove('hidden');
-        }
-    </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ultra HD PDF to HTML Converter</title>
-    
-    <!-- Tailwind CSS -->
-    <script>
-        // Silence only the Tailwind Play CDN production warning; all other warnings still show
-        (function () {
-            const originalWarn = console.warn;
-            console.warn = function (...args) {
-                if (typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com should not be used in production')) return;
-                originalWarn.apply(console, args);
-            };
-        })();
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PDF.js 3.11.174 for client-side rendering -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- Loading the worker as a normal script lets PDF.js run without background workers (works in sandboxes/previews) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
-    
-    <style>
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .dropzone-active {
-            border-color: #3b82f6 !important;
-            background-color: #eff6ff !important;
-            transform: scale(1.02);
-        }
-        .animate-stripes {
-            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%, transparent 75%, transparent);
-            background-size: 1rem 1rem;
-            animation: progress-stripes 1s linear infinite;
-        }
-        @keyframes progress-stripes {
-            from { background-position: 1rem 0; }
-            to { background-position: 0 0; }
-        }
-    </style>
-</head>
-<body class="bg-gradient-to-br from-gray-900 via-slate-800 to-black min-h-screen flex items-center justify-center p-4 text-gray-800 relative">
-
-    <div class="max-w-xl w-full relative z-10">
-        <div class="glass-panel rounded-3xl shadow-2xl p-8 md:p-12 transition-all duration-500">
-            
-            <!-- Header -->
-            <div class="text-center mb-8">
-                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-50 text-blue-600 mb-4 shadow-sm border border-blue-100">
-                    <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 16.5v-3h1.2a1.2 1.2 0 0 1 0 2.4H8.5M13 13.5v3h.8a1.5 1.5 0 0 0 0-3zM17.5 13.5h-1.6v3M15.9 15h1.3"/></svg>
+                    <!-- Error Message Box -->
+                    <div id="errorBox" class="hidden" role="alert">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>
+                        <span id="errorMessage">Something went wrong.</span>
+                    </div>
                 </div>
-                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">HD PDF Converter</h1>
-                <p class="text-gray-500 mt-2 text-sm">Pixel-Perfect • Infinite Zoom</p>
-            </div>
 
-            <!-- Error Message Box -->
-            <div id="errorBox" class="hidden mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl flex items-center text-sm font-medium">
-                <svg class="w-5 h-5 mr-3 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/></svg>
-                <span id="errorMessage">An error occurred.</span>
-            </div>
+                <!-- Progress View -->
+                <div id="progressView" class="hidden">
+                    <h2 id="statusTitle">Reading your PDF</h2>
+                    <p class="muted" id="statusSubtitle">Every page is kept exactly as it is in the PDF.</p>
+                    <div class="file-chip">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                        <span id="fileName">document.pdf</span>
+                    </div>
+                    <div class="track" role="progressbar" aria-label="Conversion progress"><div id="progressBar"></div></div>
+                    <div class="progress-meta">
+                        <span id="pageCounter">Getting ready</span>
+                        <span id="percentText">0%</span>
+                    </div>
+                </div>
 
-            <!-- Upload View -->
-            <div id="uploadView" class="block">
-                <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center cursor-pointer transition-all duration-300 hover:border-blue-500 hover:bg-slate-50 group">
-                    <input type="file" id="fileInput" accept="application/pdf" class="hidden" />
-                    
-                    <svg class="w-11 h-11 mx-auto text-slate-400 group-hover:text-blue-500 transition-colors duration-300 mb-4 block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"/><path d="M12 12v8M8.5 15.5 12 12l3.5 3.5"/></svg>
-                    
-                    <h3 class="text-lg font-bold text-slate-700 mb-1">Select a PDF</h3>
-                    <p class="text-slate-500 text-sm mb-4">or drag and drop it here</p>
-                    
-                    <span class="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
-                        <svg class="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5"/><path d="M9 2.5V6M15 2.5V6M9 18v3.5M15 18v3.5M2.5 9H6M2.5 15H6M18 9h3.5M18 15h3.5"/></svg> Client-Side Processing
-                    </span>
+                <!-- Success View -->
+                <div id="successView" class="hidden">
+                    <div class="done-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+                    </div>
+                    <h2>Saved <span id="outName">notes.html</span></h2>
+                    <p class="muted">It's in your downloads folder.</p>
+                    <ol class="next-steps">
+                        <li>Copy the file to the smartboard or a pen drive.</li>
+                        <li>Open it in Chrome or Edge.</li>
+                        <li>Pinch or Ctrl + scroll to zoom into any part.</li>
+                    </ol>
+                    <button id="resetBtn" class="btn quiet" type="button">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4v4.5H8"/></svg>
+                        Convert another PDF
+                    </button>
                 </div>
             </div>
-
-            <!-- Progress View -->
-            <div id="progressView" class="hidden py-6">
-                <div class="text-center mb-6">
-                    <svg class="w-9 h-9 mx-auto text-blue-500 mb-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>
-                    <h3 class="text-xl font-bold text-gray-800 mb-1" id="statusTitle">Reading PDF...</h3>
-                    <p class="text-gray-500 text-sm" id="statusSubtitle">Keeping every layer exactly as in the PDF.</p>
-                </div>
-
-                <div class="w-full bg-slate-200 rounded-full h-4 overflow-hidden mb-2 shadow-inner">
-                    <div id="progressBar" class="h-full bg-blue-600 animate-stripes transition-all duration-300 w-0"></div>
-                </div>
-                
-                <div class="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
-                    <span id="pageCounter">Preparing...</span>
-                    <span id="percentText">0%</span>
-                </div>
-            </div>
-
-            <!-- Success View -->
-            <div id="successView" class="hidden text-center py-6">
-                <div class="w-20 h-20 mx-auto bg-green-50 rounded-full flex items-center justify-center mb-4 border border-green-100 shadow-sm">
-                    <svg class="w-10 h-10 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-                </div>
-                <h3 class="text-2xl font-bold text-gray-800 mb-2">Conversion Complete!</h3>
-                <p class="text-gray-500 text-sm mb-6">Your HTML file is downloading. It looks exactly like the PDF and stays sharp at any zoom.</p>
-                
-                <button id="resetBtn" class="inline-flex items-center bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold transition-colors border border-slate-200">
-                    <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4v4.5H8"/></svg> Convert Another
-                </button>
-            </div>
-
-        </div>
-    </div>
-
+            <div class="loupe" aria-hidden="true"><div class="handle"></div><div class="lens"><span>श</span></div></div>
+        </section>
+    </main>
 
     <!-- Discreet Signature -->
-    <div class="fixed bottom-4 right-6 text-white/30 text-sm font-semibold tracking-widest pointer-events-none select-none z-0">
-        sujal
-    </div>
+    <div class="signature">sujal</div>
 
     <!-- Viewer engine that gets embedded into every converted file -->
     <script type="text/plain" id="viewerRuntime">
@@ -1746,7 +801,7 @@
     return { p: best.p, fx: (cx - best.r.left) / best.r.width, fy: (cy - best.r.top) / best.r.height, cx: cx, cy: cy };
   }
   // Extra blank margin used only while zoomed, so a zoom point can stay put even at the document edges
-  var slack = { l: 0, t: 0, r: 0, b: 0 }, padX = 0, padT = 0, padB = 0, baseDocW = 0;
+  var slack = { l: 0, t: 0, r: 0, b: 0 }, padX = 0, padT = 0, padB = 0, baseDocW = 0, fitX = false;
   function applySlack() {
     var st = docEl.style;
     st.paddingLeft = (padX + slack.l) + 'px';
@@ -1760,22 +815,41 @@
     if (!a) return;
     var r = a.p.el.getBoundingClientRect();
     var dx = r.left + a.fx * r.width - a.cx, dy = r.top + a.fy * r.height - a.cy;
+    if (fitX) dx = 0;
     if (state.mode === 'custom') {
       var root = document.documentElement, sx = window.scrollX, sy = window.scrollY, changed = false, u;
       // content must move right/down more than scrolling allows -> add margin before it
-      if (dx < -sx) { slack.l += -dx - sx; dx = -sx; changed = true; }
+      if (dx < -sx) { if (!zoomingOut) { slack.l += -dx - sx; dx = -sx; changed = true; } }
       else if (dx > 0 && slack.l > 0) { u = Math.min(slack.l, dx); slack.l -= u; dx -= u; changed = true; }
-      if (dy < -sy) { slack.t += -dy - sy; dy = -sy; changed = true; }
+      if (dy < -sy) { if (!zoomingOut) { slack.t += -dy - sy; dy = -sy; changed = true; } }
       else if (dy > 0 && slack.t > 0) { u = Math.min(slack.t, dy); slack.t -= u; dy -= u; changed = true; }
       if (changed) applySlack();
       // not enough room to scroll right/down -> add margin after it
       var maxX = root.scrollWidth - root.clientWidth, maxY = root.scrollHeight - root.clientHeight;
       var grow = false;
-      if (sx + dx > maxX) { slack.r += sx + dx - maxX; grow = true; }
-      if (sy + dy > maxY) { slack.b += sy + dy - maxY; grow = true; }
+      if (!zoomingOut && sx + dx > maxX) { slack.r += sx + dx - maxX; grow = true; }
+      if (!zoomingOut && sy + dy > maxY) { slack.b += sy + dy - maxY; grow = true; }
       if (grow) applySlack();
     }
     window.scrollBy(dx, dy);
+    trimSlack();
+  }
+
+  // Remove extra margin that is off screen, without moving what is on screen,
+  // so the scroll area (and scrollbar) always matches the content.
+  function trimSlack() {
+    if (state.mode !== 'custom' || !(slack.l || slack.t || slack.r || slack.b)) return;
+    var root = document.documentElement, sx = window.scrollX, sy = window.scrollY;
+    var extraR = root.scrollWidth - (sx + root.clientWidth), extraB = root.scrollHeight - (sy + root.clientHeight);
+    var dx = 0, dy = 0, u, changed = false;
+    if (slack.l > 0 && sx > 0) { u = Math.min(slack.l, sx); slack.l -= u; dx -= u; changed = true; }
+    if (slack.t > 0 && sy > 0) { u = Math.min(slack.t, sy); slack.t -= u; dy -= u; changed = true; }
+    if (slack.r > 0 && extraR > 0) { slack.r -= Math.min(slack.r, extraR); changed = true; }
+    if (slack.b > 0 && extraB > 0) { slack.b -= Math.min(slack.b, extraB); changed = true; }
+    if (slack.l < 0.5) slack.l = 0; if (slack.t < 0.5) slack.t = 0; if (slack.r < 0.5) slack.r = 0; if (slack.b < 0.5) slack.b = 0;
+    if (!changed) return;
+    applySlack();
+    if (dx || dy) window.scrollBy(dx, dy);
   }
 
   function layout(anchor) {
@@ -1790,6 +864,8 @@
     var widths = pages.map(function (p) { return pageWidthFor(p, aw, ah); });
     var maxW = Math.max.apply(null, widths.concat([0]));
     if (state.mode !== 'custom') slack = { l: 0, t: 0, r: 0, b: 0 };
+    fitX = state.mode === 'custom' && zoomingOut && maxW + 2 * padX <= vw;
+    if (fitX) slack = { l: 0, t: 0, r: 0, b: 0 };   // page fits the width again: back to the centre, no extra margin
     baseDocW = Math.max(vw, maxW + 2 * padX);
     var centre = (baseDocW - 2 * padX - maxW) / 2;
 
@@ -1811,9 +887,12 @@
     var p = currentPage();
     return p.el.getBoundingClientRect().width / (p.w * PT_TO_CSS);
   }
-  var zoomFrame = 0, pendingAnchor = null;
+  var zoomFrame = 0, pendingAnchor = null, zoomingOut = false;
   function setZoom(z, anchor) {
-    state = { mode: 'custom', zoom: Math.min(MAX_Z, Math.max(MIN_Z, z)) };
+    var nz = Math.min(MAX_Z, Math.max(MIN_Z, z));
+    if (state.mode === 'custom' && Math.abs(nz - state.zoom) < 1e-6) return;   // already at the zoom limit
+    zoomingOut = z < (state.mode === 'custom' ? state.zoom : currentZoom());
+    state = { mode: 'custom', zoom: nz };
     if (anchor || !pendingAnchor) pendingAnchor = anchor || anchorAt(null);
     pages.forEach(stopDetailRender);                  // outdated the moment zoom changes
     if (zoomFrame) return;
@@ -1919,6 +998,7 @@
     timer = setTimeout(function () {
       lastTileUpdate = Date.now();
       panning = false;
+      if (!zoomFrame) trimSlack();
       updateDetails();                                 // sharp on-screen view first, then the ring around it
       pages.forEach(function (p) { if (needsBase(p)) enqueue(p); });
     }, 120);
@@ -2019,11 +1099,15 @@
 
         function setProgress(percent, label) {
             progressBar.style.width = `${percent}%`;
+            progressBar.parentElement.setAttribute('aria-valuenow', percent);
             percentText.textContent = `${percent}%`;
             if (label) pageCounter.textContent = label;
         }
 
         dropzone.addEventListener('click', () => { hideError(); fileInput.click(); });
+        dropzone.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hideError(); fileInput.click(); }
+        });
         dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dropzone-active'); });
         dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dropzone-active'));
         dropzone.addEventListener('drop', (e) => {
@@ -2093,16 +1177,18 @@
 
         // ---------- Conversion ----------
         async function handleFile(file) {
-            if (file.type !== 'application/pdf') {
-                showError('Please upload a valid PDF document.');
+            if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+                showError('That file isn\'t a PDF. Choose a file that ends in .pdf.');
                 return;
             }
             originalFileName = file.name.replace(/\.[^/.]+$/, "");
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('outName').textContent = originalFileName + '.html';
 
             uploadView.classList.add('hidden');
             progressView.classList.remove('hidden');
-            statusTitle.textContent = 'Reading PDF...';
-            setProgress(0, 'Preparing...');
+            statusTitle.textContent = 'Reading your PDF';
+            setProgress(0, 'Getting ready');
 
             try {
                 const sources = await getPdfJsSources();
@@ -2115,7 +1201,7 @@
                 const sections = [];
 
                 // Measure every page (exact size + rotation) so the layout matches the PDF 1:1
-                statusTitle.textContent = 'Mapping Pages...';
+                statusTitle.textContent = 'Measuring pages';
                 async function processPage(pageNum) {
                     if (pageNum > numPages) return;
                     const page = await pdf.getPage(pageNum);
@@ -2129,18 +1215,18 @@
                 await processPage(1);
                 await pdf.destroy();
 
-                statusTitle.textContent = 'Embedding Render Engine...';
-                setProgress(80, 'Engine');
+                statusTitle.textContent = 'Adding the viewer';
+                setProgress(80, 'Almost done');
 
-                statusTitle.textContent = 'Packaging Output...';
-                setProgress(90, 'Packing');
+                statusTitle.textContent = 'Saving the file';
+                setProgress(90, 'Almost done');
                 const base64 = await fileToBase64(file);
 
-                setProgress(100, 'Complete');
+                setProgress(100, 'Done');
                 triggerAutoDownload(sections, sources, base64);
             } catch (error) {
                 console.error("Conversion Error:", error);
-                showError("Failed to process PDF. It may be corrupted or password protected.");
+                showError("This PDF couldn't be read. It may be damaged or password-protected. Try saving it again from the app that made it.");
             }
         }
 
